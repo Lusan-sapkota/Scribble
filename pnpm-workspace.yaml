@@ -1,0 +1,6 @@
+minimumReleaseAgeExclude:
+  - '@excalidraw/common@0.18.0-a52cd20'
+  - '@excalidraw/element@0.18.0-a52cd20'
+  - '@excalidraw/excalidraw@0.18.0-a52cd20'
+  - '@excalidraw/fractional-indexing@0.18.0-a52cd20'
+  - '@excalidraw/math@0.18.0-a52cd20'

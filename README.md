@@ -1,3 +1,5 @@
+<img src="logo.svg" width="96" alt="Scribble logo">
+
 # Scribble
 
 Draw on any web page. Scribble is a private Chrome extension that places an Excalidraw-style canvas over the current page. You can sketch, add shapes, arrows and text, and annotate. Drawings stay attached to the page as you scroll and come back when you revisit the page.
@@ -40,4 +42,4 @@ Vite, React, TypeScript, `@crxjs/vite-plugin`, `@excalidraw/excalidraw`, Manifes
 
 Private and proprietary. All rights reserved.
 
-Third-party components keep their own licenses. Excalidraw is MIT-licensed (see `THIRD_PARTY_LICENSES`).
+Third-party components keep their own licenses: Excalidraw (MIT), its bundled fonts (SIL OFL 1.1, MIT, and Liberation Sans under GPL v2 with font exceptions) and all other bundled npm packages. See `THIRD_PARTY_LICENSES`; the build writes the complete notice to `dist/THIRD_PARTY_LICENSES`.

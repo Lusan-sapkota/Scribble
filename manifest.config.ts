@@ -8,7 +8,11 @@ export default defineManifest({
   description: "Draw on any web page.",
   permissions: ["activeTab", "scripting", "storage"],
   background: { service_worker: "src/background.ts", type: "module" },
-  action: { default_title: "Scribble" },
+  icons: { 16: "icons/icon-16.png", 32: "icons/icon-32.png", 48: "icons/icon-48.png", 128: "icons/icon-128.png" },
+  action: {
+    default_title: "Scribble",
+    default_icon: { 16: "icons/icon-16.png", 32: "icons/icon-32.png", 48: "icons/icon-48.png", 128: "icons/icon-128.png" },
+  },
   web_accessible_resources: [{ resources: ["fonts/*"], matches: ["<all_urls>"] }],
   commands: {
     _execute_action: { suggested_key: { default: "Alt+Shift+D" } },

@@ -1,8 +1,40 @@
 import { createRoot, type Root } from "react-dom/client";
+import { CaptureUpdateAction, getNonDeletedElements, getSceneVersion } from "@excalidraw/excalidraw";
+import type {
+  BinaryFiles,
+  ExcalidrawImperativeAPI,
+  ExcalidrawInitialDataState,
+  ExcalidrawProps,
+} from "@excalidraw/excalidraw/types";
 import css from "@excalidraw/excalidraw/index.css?raw";
 import App from "./App";
 
-let mounted: { host: HTMLElement; root: Root } | null = null;
+type Mode = "draw" | "view";
+type OnChange = NonNullable<ExcalidrawProps["onChange"]>;
+type OnScrollChange = NonNullable<ExcalidrawProps["onScrollChange"]>;
+
+const viewCss = `
+:host([data-mode=view]) .layer-ui__wrapper, :host([data-mode=view]) .layer-ui__wrapper * { visibility: hidden !important; }
+:host([data-mode=view]) * { pointer-events: none !important; }
+.zoom-actions, .help-icon, .default-sidebar-trigger, .main-menu-trigger { display: none !important; }
+.excalidraw .undo-redo-buttons { position: fixed; top: 1rem; left: 1rem; margin: 0; }
+.excalidraw .App-menu__left { margin-top: 1.5rem; }
+`;
+
+let mounted: {
+  host: HTMLElement;
+  shadow: ShadowRoot;
+  root: Root;
+  key: string;
+  initialData: ExcalidrawInitialDataState;
+} | null = null;
+let loading = false;
+let mode: Mode = "draw";
+let theme: "light" | "dark" = "light";
+let api: ExcalidrawImperativeAPI | null = null;
+let savedVersion = -1;
+let saveTimer = 0;
+let pendingSave: (() => void) | null = null;
 let fontsReady = false;
 
 function loadFonts() {
@@ -17,7 +49,158 @@ function loadFonts() {
   }
 }
 
-function mount() {
+function pageKey() {
+  return "scribble:" + location.origin + location.pathname + location.search;
+}
+
+function save(key: string, elements: Parameters<OnChange>[0], files: BinaryFiles) {
+  const live = getNonDeletedElements(elements);
+  if (!live.length) {
+    chrome.storage.local.remove(key).catch(() => {});
+    return;
+  }
+  const used: BinaryFiles = {};
+  for (const el of live) {
+    if (el.type === "image" && el.fileId && files[el.fileId]) used[el.fileId] = files[el.fileId];
+  }
+  chrome.storage.local
+    .set({ [key]: { elements: live, files: used } })
+    .catch((e) => console.warn("Scribble: could not save drawing", e));
+}
+
+function flush() {
+  clearTimeout(saveTimer);
+  pendingSave?.();
+  pendingSave = null;
+}
+
+const onChange: OnChange = (elements, _, files) => {
+  if (!mounted) return;
+  const version = getSceneVersion(elements);
+  if (version === savedVersion) return;
+  savedVersion = version;
+  const key = mounted.key;
+  pendingSave = () => save(key, elements, files);
+  clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(flush, 500);
+};
+
+function syncScroll() {
+  api?.updateScene({ appState: { scrollX: -window.scrollX, scrollY: -window.scrollY } });
+}
+
+const onScrollChange: OnScrollChange = (scrollX, scrollY, zoom) => {
+  if (zoom.value !== 1) {
+    api?.updateScene({
+      appState: { zoom: { value: 1 as typeof zoom.value }, scrollX: -window.scrollX, scrollY: -window.scrollY },
+    });
+  } else if (-scrollX !== window.scrollX || -scrollY !== window.scrollY) {
+    window.scrollTo({ left: -scrollX, top: -scrollY, behavior: "instant" });
+    syncScroll();
+  }
+};
+
+const popup = "[data-radix-popper-content-wrapper], .dropdown-menu, .popover";
+
+function onPointerDown(e: PointerEvent) {
+  const inner = e.composedPath()[0];
+  if (inner instanceof Element && inner.closest(popup)) Object.defineProperty(e, "target", { value: inner });
+}
+
+function opensModal(e: KeyboardEvent) {
+  const k = e.key.toLowerCase();
+  const mod = e.ctrlKey || e.metaKey;
+  return k === "?" || (mod && (k === "/" || k === "o" || (e.shiftKey && (k === "e" || k === "p"))));
+}
+
+function focusCanvas() {
+  mounted?.shadow.querySelector<HTMLElement>(".excalidraw-container")?.focus();
+}
+
+function onClear() {
+  if (api && confirm("Clear all drawings on this page?")) {
+    api.updateScene({ elements: [], captureUpdate: CaptureUpdateAction.IMMEDIATELY });
+  }
+  focusCanvas();
+}
+
+function onKeyDown(e: KeyboardEvent) {
+  if (opensModal(e)) {
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+  if (e.key !== "Escape" || mode !== "draw" || !api) return;
+  const s = api.getAppState();
+  if (Object.keys(s.selectedElementIds).length || s.editingTextElement || s.newElement || s.multiElement) return;
+  e.stopPropagation();
+  setMode("view");
+}
+
+function pageTheme() {
+  return pageIsDark() ? "dark" : "light";
+}
+
+function pageIsDark() {
+  for (const el of [document.body, document.documentElement]) {
+    if (!el) continue;
+    const [r, g, b, a = 1] = (getComputedStyle(el).backgroundColor.match(/[\d.]+/g) ?? []).map(Number);
+    if (a > 0) return 0.299 * r + 0.587 * g + 0.114 * b < 128;
+  }
+  return getComputedStyle(document.documentElement).colorScheme.includes("dark");
+}
+
+function render() {
+  if (!mounted) return;
+  mounted.root.render(
+    <App
+      autoFocus
+      initialData={mounted.initialData}
+      theme={theme}
+      onExcalidrawAPI={(a) => (api = a)}
+      onChange={onChange}
+      onScrollChange={onScrollChange}
+      onClear={onClear}
+    />,
+  );
+}
+
+function setMode(next: Mode) {
+  if (!mounted) return;
+  if (next === "view" && api && !api.getSceneElements().length) return unmount();
+  mode = next;
+  mounted.host.dataset.mode = next;
+  mounted.host.style.pointerEvents = next === "view" ? "none" : "";
+  if (next === "view") {
+    (mounted.shadow.activeElement as HTMLElement | null)?.blur();
+    api?.updateScene({ appState: { selectedElementIds: {} } });
+    return;
+  }
+  if (pageTheme() !== theme) {
+    theme = pageTheme();
+    render();
+  }
+  focusCanvas();
+}
+
+function adoptModal(shadow: ShadowRoot, node: Node) {
+  const { scrollX, scrollY } = window;
+  Node.prototype.appendChild.call(document.body, node);
+  queueMicrotask(() => {
+    if (!(node instanceof Element) || !node.classList.contains("excalidraw-modal-container")) return;
+    const active = document.activeElement;
+    shadow.appendChild(node);
+    if (active instanceof HTMLElement && node.contains(active)) active.focus({ preventScroll: true });
+    window.scrollTo({ left: scrollX, top: scrollY, behavior: "instant" });
+  });
+  return node;
+}
+
+async function mount() {
+  loading = true;
+  const key = pageKey();
+  const stored = (await chrome.storage.local.get(key))[key] as ExcalidrawInitialDataState | undefined;
+  loading = false;
   loadFonts();
   const host = document.createElement("div");
   host.id = "scribble-host";
@@ -26,27 +209,63 @@ function mount() {
   for (const type of ["keydown", "keyup", "keypress"]) {
     host.addEventListener(type, (e) => e.stopPropagation());
   }
+  host.addEventListener("keydown", onKeyDown, true);
+  host.addEventListener("wheel", (e) => e.stopPropagation(), true);
+  host.addEventListener("pointerdown", onPointerDown);
   const shadow = host.attachShadow({ mode: "open" });
   const style = document.createElement("style");
-  style.textContent = css
-    .replace(/@font-face\{[^}]*\}/g, "")
-    .replace(/:root(\[[^\]]+\])/g, ":host($1)")
-    .replaceAll(":root", ":host");
+  style.textContent =
+    css
+      .replace(/@font-face\{[^}]*\}/g, "")
+      .replace(/:root(\[[^\]]+\])/g, ":host($1)")
+      .replaceAll(":root", ":host") + viewCss;
   const container = document.createElement("div");
   container.style.cssText = "width:100%;height:100%";
   shadow.append(style, container);
   document.documentElement.append(host);
-  const root = createRoot(container);
-  root.render(<App />);
-  mounted = { host, root };
+  Object.defineProperties(document.body, {
+    appendChild: { configurable: true, value: (node: Node) => adoptModal(shadow, node) },
+    removeChild: { configurable: true, value: (node: Node) => (node.parentNode?.removeChild(node), node) },
+  });
+  window.addEventListener("scroll", syncScroll, { passive: true });
+  window.addEventListener("pagehide", flush);
+  mode = "draw";
+  theme = pageTheme();
+  host.dataset.mode = mode;
+  mounted = {
+    host,
+    shadow,
+    root: createRoot(container),
+    key,
+    initialData: {
+      elements: stored?.elements,
+      files: stored?.files,
+      appState: {
+        viewBackgroundColor: "transparent",
+        scrollX: -window.scrollX,
+        scrollY: -window.scrollY,
+      },
+    },
+  };
+  render();
+}
+
+function unmount() {
+  if (!mounted) return;
+  flush();
+  window.removeEventListener("scroll", syncScroll);
+  window.removeEventListener("pagehide", flush);
+  mounted.root.unmount();
+  Reflect.deleteProperty(document.body, "appendChild");
+  Reflect.deleteProperty(document.body, "removeChild");
+  mounted.host.remove();
+  mounted = null;
+  api = null;
+  savedVersion = -1;
 }
 
 export function onExecute() {
-  if (mounted) {
-    mounted.root.unmount();
-    mounted.host.remove();
-    mounted = null;
-  } else {
-    mount();
-  }
+  if (loading) return;
+  if (!mounted) mount();
+  else setMode(mode === "draw" ? "view" : "draw");
 }

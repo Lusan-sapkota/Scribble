@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@excalidraw/excalidraw": "^0.18.1",
+    "@excalidraw/excalidraw": "0.18.0-a52cd20",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
