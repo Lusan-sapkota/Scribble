@@ -9,6 +9,7 @@ export default defineManifest({
   permissions: ["activeTab", "scripting", "storage"],
   background: { service_worker: "src/background.ts", type: "module" },
   action: { default_title: "Scribble" },
+  web_accessible_resources: [{ resources: ["fonts/*"], matches: ["<all_urls>"] }],
   commands: {
     _execute_action: { suggested_key: { default: "Alt+Shift+D" } },
   },
