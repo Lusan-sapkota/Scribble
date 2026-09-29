@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.zip
+*.crx
+*.pem
+.vite/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+CLAUDE.md
