@@ -5,7 +5,7 @@ export default defineManifest({
   manifest_version: 3,
   name: "Scribble",
   version: pkg.version,
-  description: "Draw on any web page.",
+  description: "Mark up the web. Hand-drawn notes, arrows and diagrams that stay pinned to the page and are there when you come back.",
   permissions: ["activeTab", "scripting", "storage"],
   background: { service_worker: "src/background.ts", type: "module" },
   icons: { 16: "icons/icon-16.png", 32: "icons/icon-32.png", 48: "icons/icon-48.png", 128: "icons/icon-128.png" },

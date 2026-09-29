@@ -2,7 +2,9 @@
 
 # Scribble
 
-Draw on any web page. Scribble is a private Chrome extension that places an Excalidraw-style canvas over the current page. You can sketch, add shapes, arrows and text, and annotate. Drawings stay attached to the page as you scroll and come back when you revisit the page.
+Mark up the web. Hand-drawn notes, arrows and diagrams that stay pinned to the page and are there when you come back.
+
+Scribble is a private Chrome extension that places an Excalidraw-style canvas over the current page. You can sketch, add shapes, arrows and text, and annotate. Drawings stay attached to the page as you scroll and come back when you revisit the page.
 
 ## Why
 
