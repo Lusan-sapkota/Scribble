@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Lusan-sapkota/Scribble/releases/latest"><img src="https://img.shields.io/github/v/release/Lusan-sapkota/Scribble?color=6965db" alt="Latest release"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/Lusan-sapkota/Scribble?color=6965db" alt="MIT license"></a>
+  <a href="https://github.com/Lusan-sapkota/Scribble/releases/latest"><img src="https://img.shields.io/github/v/release/Lusan-sapkota/Scribble?color=6965db&label=release" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Lusan-sapkota/Scribble?color=6965db&label=license" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/manifest-v3-6965db" alt="Manifest V3">
   <img src="https://img.shields.io/badge/browser-Chrome%20%7C%20Edge%20%7C%20Brave-6965db" alt="Chromium browsers">
   <a href="https://github.com/excalidraw/excalidraw"><img src="https://img.shields.io/badge/inspired%20by-Excalidraw-6965db" alt="Inspired by Excalidraw"></a>
