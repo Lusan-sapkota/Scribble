@@ -2,11 +2,19 @@
   "name": "scribble",
   "private": true,
   "version": "0.1.0",
+  "description": "Mark up the web. Hand-drawn notes, arrows and diagrams that stay pinned to the page and are there when you come back.",
+  "license": "MIT",
+  "author": "Lusan Sapkota",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Lusan-sapkota/Scribble.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "zip": "pnpm build && cd dist && zip -qr ../scribble-v$npm_package_version.zip ."
   },
   "dependencies": {
     "@excalidraw/excalidraw": "0.18.0-a52cd20",

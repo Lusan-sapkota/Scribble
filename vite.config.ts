@@ -14,7 +14,7 @@ function bundledAssets(): Plugin {
     cpSync(fonts, resolve(outDir, "fonts"), { recursive: true });
     const generated = resolve(outDir, npmLicenses);
     const npm = existsSync(generated) ? "\n" + readFileSync(generated, "utf8") : "";
-    writeFileSync(resolve(outDir, "THIRD_PARTY_LICENSES"), readFileSync("THIRD_PARTY_LICENSES", "utf8") + npm);
+    writeFileSync(resolve(outDir, "THIRD_PARTY_LICENSES"), readFileSync("licenses/bundled.txt", "utf8") + npm);
     rmSync(resolve(outDir, ".vite"), { recursive: true, force: true });
   };
   return {
