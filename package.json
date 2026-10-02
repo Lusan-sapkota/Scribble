@@ -1,7 +1,7 @@
 {
   "name": "scribble",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Mark up the web. Hand-drawn notes, arrows and diagrams that stay pinned to the page and are there when you come back.",
   "license": "MIT",
   "author": "Lusan Sapkota",
