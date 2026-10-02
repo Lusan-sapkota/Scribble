@@ -100,17 +100,22 @@ const onScrollChange: OnScrollChange = (scrollX, scrollY, zoom) => {
   }
 };
 
-const popup = "[data-radix-popper-content-wrapper], .dropdown-menu, .popover";
+const keyEvents = ["keydown", "keyup", "keypress"];
 
-function onPointerDown(e: PointerEvent) {
-  const inner = e.composedPath()[0];
-  if (inner instanceof Element && inner.closest(popup)) Object.defineProperty(e, "target", { value: inner });
+const pointerEvents = ["pointerdown", "pointerup"];
+
+function retarget(e: Event) {
+  if (mounted && e.target === mounted.host) Object.defineProperty(e, "target", { value: e.composedPath()[0] });
 }
 
 function opensModal(e: KeyboardEvent) {
   const k = e.key.toLowerCase();
   const mod = e.ctrlKey || e.metaKey;
   return k === "?" || (mod && (k === "/" || k === "o" || (e.shiftKey && (k === "e" || k === "p"))));
+}
+
+function zoomsBrowser(e: KeyboardEvent) {
+  return (e.ctrlKey || e.metaKey) && ["=", "+", "-", "0"].includes(e.key);
 }
 
 function focusCanvas() {
@@ -127,6 +132,10 @@ function onClear() {
 function onKeyDown(e: KeyboardEvent) {
   if (opensModal(e)) {
     e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+  if (zoomsBrowser(e)) {
     e.stopPropagation();
     return;
   }
@@ -154,7 +163,7 @@ function render() {
   if (!mounted) return;
   mounted.root.render(
     <App
-      autoFocus
+      autoFocus={mode === "draw"}
       initialData={mounted.initialData}
       theme={theme}
       onExcalidrawAPI={(a) => (api = a)}
@@ -187,7 +196,7 @@ function adoptModal(shadow: ShadowRoot, node: Node) {
   const { scrollX, scrollY } = window;
   Node.prototype.appendChild.call(document.body, node);
   queueMicrotask(() => {
-    if (!(node instanceof Element) || !node.classList.contains("excalidraw-modal-container")) return;
+    if (!(node instanceof Element) || !node.matches(".excalidraw-modal-container, .excalidraw-tooltip")) return;
     const active = document.activeElement;
     shadow.appendChild(node);
     if (active instanceof HTMLElement && node.contains(active)) active.focus({ preventScroll: true });
@@ -196,22 +205,23 @@ function adoptModal(shadow: ShadowRoot, node: Node) {
   return node;
 }
 
-async function mount() {
+async function mount(next: Mode = "draw") {
   loading = true;
   const key = pageKey();
   const stored = (await chrome.storage.local.get(key))[key] as ExcalidrawInitialDataState | undefined;
   loading = false;
+  if (next === "view" && !stored) return;
   loadFonts();
   const host = document.createElement("div");
   host.id = "scribble-host";
   host.dir = "ltr";
-  host.style.cssText = "all:initial;position:fixed;inset:0;z-index:2147483647";
-  for (const type of ["keydown", "keyup", "keypress"]) {
+  host.style.cssText = "all:initial;position:fixed;inset:0";
+  host.popover = "manual";
+  for (const type of keyEvents) {
     host.addEventListener(type, (e) => e.stopPropagation());
   }
   host.addEventListener("keydown", onKeyDown, true);
   host.addEventListener("wheel", (e) => e.stopPropagation(), true);
-  host.addEventListener("pointerdown", onPointerDown);
   const shadow = host.attachShadow({ mode: "open" });
   const style = document.createElement("style");
   style.textContent =
@@ -223,15 +233,60 @@ async function mount() {
   container.style.cssText = "width:100%;height:100%";
   shadow.append(style, container);
   document.documentElement.append(host);
+  host.showPopover();
   Object.defineProperties(document.body, {
     appendChild: { configurable: true, value: (node: Node) => adoptModal(shadow, node) },
     removeChild: { configurable: true, value: (node: Node) => (node.parentNode?.removeChild(node), node) },
   });
+  const activeElement = Object.getOwnPropertyDescriptor(Document.prototype, "activeElement")!.get!;
+  Object.defineProperties(document, {
+    activeElement: {
+      configurable: true,
+      get: () => {
+        const active = activeElement.call(document);
+        return active === host ? (shadow.activeElement ?? host) : active;
+      },
+    },
+    elementFromPoint: {
+      configurable: true,
+      value: (x: number, y: number) => {
+        const hit = Document.prototype.elementFromPoint.call(document, x, y);
+        return hit === host ? shadow.elementFromPoint(x, y) : hit;
+      },
+    },
+    querySelector: {
+      configurable: true,
+      value: (selector: string) => shadow.querySelector(selector) ?? Document.prototype.querySelector.call(document, selector),
+    },
+  });
+  for (const target of [document, window]) {
+    const route = (type: string, capture: boolean) => (keyEvents.includes(type) && !capture ? host : target);
+    Object.defineProperties(target, {
+      addEventListener: {
+        configurable: true,
+        value: (type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions) =>
+          EventTarget.prototype.addEventListener.call(
+            route(type, typeof options === "boolean" ? options : !!options?.capture),
+            type,
+            listener,
+            options,
+          ),
+      },
+      removeEventListener: {
+        configurable: true,
+        value: (type: string, listener: EventListenerOrEventListenerObject | null) => {
+          for (const capture of [false, true]) {
+            EventTarget.prototype.removeEventListener.call(route(type, capture), type, listener, capture);
+          }
+        },
+      },
+    });
+  }
+  for (const type of pointerEvents) window.addEventListener(type, retarget, true);
   window.addEventListener("scroll", syncScroll, { passive: true });
   window.addEventListener("pagehide", flush);
-  mode = "draw";
+  window.navigation?.addEventListener("currententrychange", onNavigate);
   theme = pageTheme();
-  host.dataset.mode = mode;
   mounted = {
     host,
     shadow,
@@ -247,17 +302,34 @@ async function mount() {
       },
     },
   };
+  setMode(next);
   render();
+}
+
+function onNavigate() {
+  if (!mounted || pageKey() === mounted.key) return;
+  const next = mode;
+  unmount();
+  mount(next);
 }
 
 function unmount() {
   if (!mounted) return;
   flush();
+  for (const type of pointerEvents) window.removeEventListener(type, retarget, true);
   window.removeEventListener("scroll", syncScroll);
   window.removeEventListener("pagehide", flush);
+  window.navigation?.removeEventListener("currententrychange", onNavigate);
   mounted.root.unmount();
   Reflect.deleteProperty(document.body, "appendChild");
   Reflect.deleteProperty(document.body, "removeChild");
+  Reflect.deleteProperty(document, "activeElement");
+  Reflect.deleteProperty(document, "elementFromPoint");
+  Reflect.deleteProperty(document, "querySelector");
+  for (const target of [document, window]) {
+    Reflect.deleteProperty(target, "addEventListener");
+    Reflect.deleteProperty(target, "removeEventListener");
+  }
   mounted.host.remove();
   mounted = null;
   api = null;
